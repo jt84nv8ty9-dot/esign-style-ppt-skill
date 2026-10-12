@@ -1,0 +1,35 @@
+name: Sync v1.1.0 skill files
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Import verified complete skill package
+        shell: bash
+        run: |
+          set -euo pipefail
+          test ! -e artifact-template-e
+          curl --fail --location --retry 3 'https://github.com/jt84nv8ty9-dot/esign-style-ppt-skill/releases/download/v1.1.0/esign-style-ppt-skill-v1.1.0.zip' -o /tmp/skill.zip
+          echo 'bdf347f0b555e9690c78e983ec4978ecc4b66f407a4ace3ee3a756386ce099d6  /tmp/skill.zip' | sha256sum --check
+          unzip -q /tmp/skill.zip
+          test -f artifact-template-e/SKILL.md
+          test -f artifact-template-e/references/interior-design.md
+          test -f artifact-template-e/assets/reference.pptx
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('README.md')
+          s = p.read_text()
+          s = s.replace('请下载发布附件，不要使用仅含仓库说明的 Source code 压缩包。', '仓库主分支现已包含完整技能文件：[查看 SKILL.md](artifact-template-e/SKILL.md) · [内页设计指南](artifact-template-e/references/interior-design.md)。可通过 Code → Download ZIP 下载主分支，或下载上述发布附件。v1.1.0 发布页自动生成的 Source code 包对应较早提交，安装时请使用完整发布附件或主分支。')
+          p.write_text(s)
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add artifact-template-e README.md
+          git commit -m 'Sync complete v1.1.0 skill source and original assets to repository'
+          git push origin HEAD:main
