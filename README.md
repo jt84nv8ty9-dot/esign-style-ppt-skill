@@ -14,7 +14,7 @@
 
 [下载最新版完整技能包](https://github.com/jt84nv8ty9-dot/esign-style-ppt-skill/releases/download/v1.1.0/esign-style-ppt-skill-v1.1.0.zip) · [版本说明](https://github.com/jt84nv8ty9-dot/esign-style-ppt-skill/releases/tag/v1.1.0)
 
-请下载发布附件，不要使用仅含仓库说明的 Source code 压缩包。完整包包含原始18页PPT（含视频）、全部预览、设计规范、灵活内页设计指南、原型目录和Python脚本。
+仓库主分支现已包含完整技能文件：[查看 SKILL.md](artifact-template-e/SKILL.md) · [内页设计指南](artifact-template-e/references/interior-design.md)。可通过 Code → Download ZIP 下载主分支，或下载上述发布附件。v1.1.0 发布页自动生成的 Source code 包对应较早提交，安装时请使用完整发布附件或主分支。完整包包含原始18页PPT（含视频）、全部预览、设计规范、灵活内页设计指南、原型目录和Python脚本。
 
 解压后将整个 `artifact-template-e` 文件夹放入：
 

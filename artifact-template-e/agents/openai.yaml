@@ -1,0 +1,7 @@
+interface:
+  display_name: "e签宝风格ppt"
+  short_description: "保持封面、标题与紫色配色，按内容设计丰富内页并共用品牌背景"
+  icon_large: "./assets/preview.png"
+  default_prompt: "使用 $artifact-template-e 根据我的资料制作PPT，复用原封面画面，只改文字，统一内容页大标题、配色和品牌背景，按内容设计丰富的内页布局。"
+policy:
+  allow_implicit_invocation: true
