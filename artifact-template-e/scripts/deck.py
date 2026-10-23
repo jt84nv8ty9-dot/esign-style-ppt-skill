@@ -14,6 +14,7 @@ NS = {'p':'http://schemas.openxmlformats.org/presentationml/2006/main',
 for k,v in NS.items(): E.register_namespace(k,v)
 A,P,R = [NS[k] for k in ('a','p','r')]
 SLOTS = json.loads((ROOT/'references/slots.json').read_text())
+CONFIG = json.loads((ROOT/'references/template-config.json').read_text())
 def tag(n): return '{'+NS[n.split(':')[0]]+'}'+n.split(':')[1]
 def xml(b): return E.fromstring(b)
 def dump(e):
@@ -46,13 +47,27 @@ def text_shape(s, value):
         E.SubElement(r,tag('a:t')).text=line
         p.insert(list(p).index(end) if end is not None else len(p),r);body.append(p)
 
+def title_style(ref):
+    style=copy.deepcopy(ref.find('p:txBody/a:lstStyle/a:lvl1pPr/a:defRPr',NS))
+    style.tag=tag('a:rPr');style.set('sz',str(CONFIG['title_size']))
+    return style
+
 def standard_title(s, text, ref):
-    # Copy the source page 4 title's complete inherited typography and geometry.
+    # Copy new reference typography; downstream authoring may reposition the title.
     for child in ['p:spPr','p:txBody']:
-        old=s.find(child,NS); idx=list(s).index(old);s.remove(old);s.insert(idx,copy.deepcopy(ref.find(child,NS)))
+        old=s.find(child,NS)
+        if old is not None:s.remove(old)
+        s.append(copy.deepcopy(ref.find(child,NS)))
+    s.find('p:nvSpPr/p:cNvPr',NS).set('name','ESIGN_TITLE')
     text_shape(s,text)
-    for st in s.findall('.//a:rPr',NS): st.set('sz','3000')
-    # Standard title must remain a one-line editable title. Copy exactly, don't autofit down.
+    for para in s.findall('p:txBody/a:p',NS):
+        for run in para.findall('a:r',NS):
+            old=run.find('a:rPr',NS)
+            if old is not None:run.remove(old)
+            run.insert(0,title_style(ref))
+        end=para.find('a:endParaRPr',NS)
+        if end is not None:para.remove(end)
+
 
 def relpath(part): return posixpath.join(posixpath.dirname(part),'_rels',posixpath.basename(part)+'.rels')
 def target(part,t): return posixpath.normpath(posixpath.join(posixpath.dirname(part),t)).lstrip('/')
@@ -86,16 +101,42 @@ def build(specpath,output):
     rel=xml(data['ppt/_rels/presentation.xml.rels'])
     for e in list(rel):
         if e.get('Type').endswith('/slide'):rel.remove(e)
-    ct=xml(data['[Content_Types].xml']);title_ref=shapes(xml(src['ppt/slides/slide4.xml']))['10']
+    ct=xml(data['[Content_Types].xml']);title_ref=shapes(xml(src[f"ppt/slides/slide{CONFIG['title_slide']}.xml"]))[CONFIG['title_shape_id']]
+    # Keep one actual master in the output; the retained reference remains untouched.
+    master_ids={e.get('Id') for e in rel if e.get('Type').endswith('/slideMaster') and target('ppt/presentation.xml',e.get('Target'))!=CONFIG['master']}
+    for e in list(rel):
+        if e.get('Id') in master_ids:rel.remove(e)
+    masters=pres.find('p:sldMasterIdLst',NS)
+    if masters is not None:
+        for e in list(masters):
+            if e.get(tag('r:id')) in master_ids:masters.remove(e)
     used_ids={e.get('Id') for e in rel}; nextid=1000
     for i,item in enumerate(plan,1):
         sn=int(item['source'])
-        if not 1<=sn<=18:raise ValueError('Source page must be 1..18')
-        if sn in (2,3,6) and not item.get('allow_source_assets',False):
-            raise ValueError(f'Page {sn} includes business images/charts/video; explicitly decide reuse first')
-        source=f'ppt/slides/slide{sn}.xml';r=xml(src[source]);ss=shapes(r)
+        if not 1<=sn<=len(SLOTS):raise ValueError('Invalid source page')
+        blank=item.get('blank',False)
+        if sn==1 and blank:raise ValueError('Cover cannot be blanked')
+        if sn in CONFIG['noncanonical_sources'] and not blank:raise ValueError('Source uses another master; rebuild its composition with blank:true on the brand background')
+        if SLOTS[sn-1]['requires_asset_review'] and sn!=1 and not blank and not item.get('allow_source_assets',False):
+            raise ValueError(f'Page {sn} has source media; review suitability and set allow_source_assets:true or use blank:true')
+        source=f'ppt/slides/slide{sn}.xml';r=xml(src[source])
+        if sn!=1:
+            bg=r.find('p:cSld/p:bg',NS)
+            if bg is not None:r.find('p:cSld',NS).remove(bg)
+            r.set('showMasterSp','1')
+        if blank:
+            tree=r.find('p:cSld/p:spTree',NS)
+            for el in list(tree):
+                if el.tag not in (tag('p:nvGrpSpPr'),tag('p:grpSpPr')):tree.remove(el)
+            for el in list(r):
+                if el.tag in (tag('p:timing'),tag('p:transition')):r.remove(el)
+        ss=shapes(r)
         repl={str(k):v for k,v in item.get('replace',{}).items()}
-        title_id=SLOTS[sn-1]['title_id']
+        title_id=None if sn in (1,CONFIG['ending_slide']) and not blank else SLOTS[sn-1]['title_id']
+        if sn!=1 and (sn!=CONFIG['ending_slide'] or blank) and (blank or title_id is None):
+            new=copy.deepcopy(title_ref);title_id=str(max([int(e.get('id')) for e in r.findall('.//p:cNvPr',NS)]+[1])+1)
+            new.find('p:nvSpPr/p:cNvPr',NS).set('id',title_id)
+            r.find('p:cSld/p:spTree',NS).append(new);ss=shapes(r)
         if title_id:
             if not item.get('title'):raise ValueError(f'Page {i}: title required')
             repl[title_id]=item['title']
@@ -104,12 +145,15 @@ def build(specpath,output):
         missing=required-set(repl)-keep
         if missing:raise ValueError(f'Page {i}: replace or explicitly keep text shapes {sorted(missing)}')
         if set(repl)-set(ss):raise ValueError(f'Page {i}: unknown shape IDs')
-        if sn==1 and (set(repl)-{'3','4','6','7'}):raise ValueError('Only four cover text shapes may change')
+        if sn==1 and (set(repl)-set(CONFIG['cover_text_ids'])):raise ValueError('Only four cover text shapes may change')
         for k,v in repl.items():
             if k==title_id:standard_title(ss[k],v,title_ref)
             else:text_shape(ss[k],v)
         part=f'ppt/slides/generated{i}.xml';data[part]=dump(r)
         sr=xml(src[relpath(source)])
+        if blank:
+            for e in list(sr):
+                if not e.get('Type').endswith('/slideLayout'):sr.remove(e)
         for e in list(sr):
             if e.get('Type').endswith('/notesSlide'):sr.remove(e)
             if e.get('Type').endswith('/slideLayout'):
@@ -128,6 +172,7 @@ def build(specpath,output):
     print(json.dumps({'output':str(out.resolve()),'slides':len(plan)},ensure_ascii=False))
 
 def canonical(e):
+    if e is None:return None
     return (e.tag,tuple(sorted(e.attrib.items())),e.text or '',tuple(canonical(x) for x in e))
 def type_signature(e):
     e=copy.deepcopy(e)
@@ -159,7 +204,7 @@ def audit(pptx):
     if strip_text(xml(src['ppt/slides/slide1.xml']))!=strip_text(xml(data[parts[0]])):errors.append('Cover non-text objects changed')
     # Cover typography/boxes must remain source styles even though paragraphs can change.
     cs,ds=shapes(xml(src['ppt/slides/slide1.xml'])),shapes(xml(data[parts[0]]))
-    for sid in ['3','4','6','7']:
+    for sid in CONFIG['cover_text_ids']:
         if sid not in ds:errors.append('Missing cover field '+sid);continue
         for path in ['p:txBody/a:bodyPr','p:txBody/a:lstStyle']:
             if canonical(cs[sid].find(path,NS))!=canonical(ds[sid].find(path,NS)):errors.append('Cover text style changed '+sid)
@@ -171,18 +216,39 @@ def audit(pptx):
     if media_rels(src[relpath('ppt/slides/slide1.xml')])!=media_rels(data[relpath(parts[0])]):errors.append('Cover relationships changed')
     for part in asset_closure(src,'ppt/slides/slide1.xml'):
         if data.get(part)!=src[part]:errors.append('Cover/master asset changed: '+part)
-    standard=shapes(xml(src['ppt/slides/slide4.xml']))['10']
-    st=standard.find('p:txBody/a:lstStyle',NS)
+    standard=shapes(xml(src[f"ppt/slides/slide{CONFIG['title_slide']}.xml"]))[CONFIG['title_shape_id']]
+    expected_style=title_style(standard)
+    masters=xml(data['ppt/presentation.xml']).find('p:sldMasterIdLst',NS)
+    if masters is None or len(masters)!=1:errors.append('Output must use one master')
     for i,part in enumerate(parts):
         root=xml(data[part]);rels=xml(data[relpath(part)]);layouts=[x.get('Target') for x in rels if x.get('Type').endswith('/slideLayout')]
-        expected='../slideLayouts/slideLayout1.xml' if i==0 else '../slideLayouts/slideLayout2.xml'
+        expected=CONFIG['cover_layout'] if i==0 else CONFIG['content_layout']
         if layouts!=[expected]:errors.append(f'Page {i+1}: wrong layout')
         if i==0:continue
-        ending=strip_text(root)==strip_text(xml(src['ppt/slides/slide18.xml']))
-        if ending:continue
-        ts=[s for s in shapes(root).values() if s.find('p:txBody/a:lstStyle',NS) is not None and canonical(s.find('p:txBody/a:lstStyle',NS))==canonical(st)]
-        if len(ts)!=1:errors.append(f'Page {i+1}: missing/duplicate canonical title');continue
-        if any(x.get('sz')!='3000' for x in ts[0].findall('.//a:rPr',NS)):errors.append(f'Page {i+1}: title must be 30pt')
+        if root.find('p:cSld/p:bg',NS) is not None or root.get('showMasterSp')=='0':errors.append(f'Page {i+1}: background override')
+        ss=shapes(root)
+        # Closing-page exception only when the original layout/objects/text styles are retained.
+        ending=xml(src[f"ppt/slides/slide{CONFIG['ending_slide']}.xml"])
+        ending.set('showMasterSp','1')
+        if strip_text(root)==strip_text(ending):
+            es=shapes(ending)
+            for sid,shape in ss.items():
+                allowed={type_signature(x) for x in es[sid].findall('.//a:rPr',NS)}
+                if any(type_signature(x) not in allowed for x in shape.findall('.//a:rPr',NS)):errors.append(f'Page {i+1}: closing text style changed')
+            continue
+        ts=[s for s in ss.values() if s.find('p:nvSpPr/p:cNvPr',NS).get('name')=='ESIGN_TITLE']
+        if len(ts)!=1:errors.append(f'Page {i+1}: require one ESIGN_TITLE text box');continue
+        runs=ts[0].findall('p:txBody/a:p/a:r/a:rPr',NS)
+        if not runs:errors.append(f'Page {i+1}: empty title')
+        for sty in runs:
+            if sty.get('sz')!=str(CONFIG['title_size']) or sty.get('b')!='1':errors.append(f'Page {i+1}: title must be bold 30pt')
+            for child in ['a:latin','a:ea','a:cs','a:gradFill']:
+                if canonical(sty.find(child,NS))!=canonical(expected_style.find(child,NS)):errors.append(f'Page {i+1}: title font/gradient changed')
+            if sty.find('a:solidFill',NS) is not None:errors.append(f'Page {i+1}: solid title fill')
+    # Shared layout bytes and their full dependency closure must remain intact.
+    layout='ppt/slideLayouts/slideLayout2.xml'
+    for asset in {layout}|asset_closure(src,layout):
+        if data.get(asset)!=src[asset]:errors.append('Shared background asset changed: '+asset)
     try:prune(dict(data))
     except ValueError as e:errors.append(str(e))
     report={'passed':not errors,'pages':len(parts),'errors':errors,'limits':'Structural checks only. Render every slide for text fit; verify facts and font availability separately.'}

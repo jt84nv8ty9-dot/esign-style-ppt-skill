@@ -1,0 +1,24 @@
+{
+  "version": "2.0.0",
+  "source_name": "e签宝-ppt模板.pptx",
+  "source_sha256": "8a50fb93142f7f6ca45357ef944e7aed8f865d5b41afeca7d0ce4a5b5f63b3ea",
+  "slide_count": 35,
+  "cover_slide": 1,
+  "cover_text_ids": [
+    "3",
+    "4",
+    "6",
+    "7"
+  ],
+  "title_slide": 2,
+  "title_shape_id": "351",
+  "title_size": 3000,
+  "content_layout": "../slideLayouts/slideLayout2.xml",
+  "cover_layout": "../slideLayouts/slideLayout1.xml",
+  "master": "ppt/slideMasters/slideMaster1.xml",
+  "ending_slide": 35,
+  "noncanonical_sources": [
+    13,
+    22
+  ]
+}
