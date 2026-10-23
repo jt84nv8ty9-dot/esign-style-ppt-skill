@@ -1,6 +1,6 @@
 # e签宝风格ppt
 
-当前版本 **v2.0.0**，以2026-10-23提供的新版35页模板为准。
+当前版本 **v2.0.1**，以2026-10-23提供的新版35页模板为准。
 
 ## 设计规范
 
@@ -8,6 +8,10 @@
 - 内容大标题统一微软雅黑加粗30pt和原深灰至紫色渐变，位置、宽度与对齐可按内容调整。
 - 整套使用原稿紫色配色、第2页品牌背景和同一母版。
 - 内页可自由设计，不局限于模板里的排版、结构或卡片数量。
+
+## 内页图片与AI生图
+
+内页图片可按实际内容保留、替换、生成或移除，不必使用模板里的图片。AI工具具备生图能力时，可主动生成与主题、紫色配色、版式比例和留白匹配的配图；没有生图能力时使用合适现有素材或无图布局。封面画面、品牌背景、母版与品牌标识继续保持原规范。真实截图、证书、证据等事实性素材不能用AI虚构；标题和正文保持可编辑。详细流程见技能与内页设计规范。
 
 ## 两种使用方式
 
@@ -24,7 +28,7 @@
 
 [技能说明](artifact-template-e/SKILL.md) · [设计规范](artifact-template-e/references/design-system.md) · [内页设计指南](artifact-template-e/references/interior-design.md)
 
-[下载v2.0.0完整技能包](https://github.com/jt84nv8ty9-dot/esign-style-ppt-skill/releases/download/v2.0.0/esign-style-ppt-skill-v2.0.0.zip) · [版本说明](https://github.com/jt84nv8ty9-dot/esign-style-ppt-skill/releases/tag/v2.0.0)
+[下载v2.0.1完整技能包](https://github.com/jt84nv8ty9-dot/esign-style-ppt-skill/releases/download/v2.0.1/esign-style-ppt-skill-v2.0.1.zip) · [版本说明](https://github.com/jt84nv8ty9-dot/esign-style-ppt-skill/releases/tag/v2.0.1)
 
 主分支包含完整的50个技能文件，也可通过 Code → Download ZIP 下载。Release中请选上面的完整技能包；自动生成的Source code对应发布时的较早提交。
 
