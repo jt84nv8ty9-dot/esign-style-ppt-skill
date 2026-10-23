@@ -1,4 +1,4 @@
-name: Sync v1.1.0 skill files
+name: Sync v2.0.0 skill files
 on:
   workflow_dispatch:
 permissions:
@@ -10,26 +10,30 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: main
-      - name: Import verified complete skill package
+      - name: Sync verified v2 package and README
         shell: bash
         run: |
           set -euo pipefail
-          test ! -e artifact-template-e
-          curl --fail --location --retry 3 'https://github.com/jt84nv8ty9-dot/esign-style-ppt-skill/releases/download/v1.1.0/esign-style-ppt-skill-v1.1.0.zip' -o /tmp/skill.zip
-          echo 'bdf347f0b555e9690c78e983ec4978ecc4b66f407a4ace3ee3a756386ce099d6  /tmp/skill.zip' | sha256sum --check
-          unzip -q /tmp/skill.zip
-          test -f artifact-template-e/SKILL.md
-          test -f artifact-template-e/references/interior-design.md
-          test -f artifact-template-e/assets/reference.pptx
+          curl --fail --location --retry 3 'https://github.com/jt84nv8ty9-dot/esign-style-ppt-skill/releases/download/v2.0.0/esign-style-ppt-skill-v2.0.0.zip' -o /tmp/skill-v2.zip
+          echo '24958f589191e50f4c4f7b918ef48623ce7077558dfaf21d58b69bb2b832cf42  /tmp/skill-v2.zip' | sha256sum --check
           python3 - <<'PY'
-          from pathlib import Path
-          p = Path('README.md')
-          s = p.read_text()
-          s = s.replace('请下载发布附件，不要使用仅含仓库说明的 Source code 压缩包。', '仓库主分支现已包含完整技能文件：[查看 SKILL.md](artifact-template-e/SKILL.md) · [内页设计指南](artifact-template-e/references/interior-design.md)。可通过 Code → Download ZIP 下载主分支，或下载上述发布附件。v1.1.0 发布页自动生成的 Source code 包对应较早提交，安装时请使用完整发布附件或主分支。')
-          p.write_text(s)
+          from pathlib import Path, PurePosixPath
+          import zipfile, json
+          root = Path('artifact-template-e')
+          with zipfile.ZipFile('/tmp/skill-v2.zip') as z:
+              files = [n for n in z.namelist() if not n.endswith('/')]
+              assert len(files) == 50
+              assert all(n.startswith('artifact-template-e/') and '..' not in PurePosixPath(n).parts for n in files)
+              assert json.loads(z.read('artifact-template-e/references/template-config.json'))['version'] == '2.0.0'
+              for old in root.rglob('*'):
+                  if old.is_file() and old.as_posix() not in files:
+                      old.unlink()
+              z.extractall('.')
+          Path('README.md').write_text(json.loads(r'''"# e签宝风格ppt\n\n当前版本 **v2.0.0**，以2026-10-23提供的新版35页模板为准。\n\n## 设计规范\n\n- 封面沿用原画面，只修改文字。\n- 内容大标题统一微软雅黑加粗30pt和原深灰至紫色渐变，位置、宽度与对齐可按内容调整。\n- 整套使用原稿紫色配色、第2页品牌背景和同一母版。\n- 内页可自由设计，不局限于模板里的排版、结构或卡片数量。\n\n## 两种使用方式\n\n1. 根据主题、方向或资料制作新的可编辑PPT。\n2. 美化已有PPT草稿，默认保留原意、重要数据、来源、页数和顺序。\n\n调用示例：\n\n> $artifact-template-e 根据我的主题和资料制作8页客户介绍PPT。\n\n> 用e签宝风格ppt美化附件草稿，保留原意、数据和页数，内页按内容重新排版。\n\n## 查看与下载\n\n[技能说明](artifact-template-e/SKILL.md) · [设计规范](artifact-template-e/references/design-system.md) · [内页设计指南](artifact-template-e/references/interior-design.md)\n\n[下载v2.0.0完整技能包](https://github.com/jt84nv8ty9-dot/esign-style-ppt-skill/releases/download/v2.0.0/esign-style-ppt-skill-v2.0.0.zip) · [版本说明](https://github.com/jt84nv8ty9-dot/esign-style-ppt-skill/releases/tag/v2.0.0)\n\n主分支包含完整的50个技能文件，也可通过 Code → Download ZIP 下载。Release中请选上面的完整技能包；自动生成的Source code对应发布时的较早提交。\n\n解压后将整个 artifact-template-e 文件夹放到AI工具的技能目录中。Codex默认目录为用户主目录下的 .codex/skills/。更新时先备份个人修改，再用新版文件夹替换旧安装。显示名称为“e签宝风格ppt”，调用标识保持 artifact-template-e。\n\n## 资源与运行要求\n\n完整包包含新版原始PPT、35页预览、设计规范、两个工作流程、槽位索引与Python辅助脚本。\n\n使用环境须支持加载技能资源及制作可编辑PPT。辅助脚本需要Python 3.9+，负责品牌框架、原页换字与结构检查；内页设计及渲染由PPT制作工具完成。目标电脑需有微软雅黑。只粘贴SKILL.md不能完整复用封面和母版。\n\n本仓库公开。\n"'''), encoding='utf-8')
           PY
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add artifact-template-e README.md
-          git commit -m 'Sync complete v1.1.0 skill source and original assets to repository'
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'Update complete eSign PPT skill to v2.0.0 with new 35-slide reference'
           git push origin HEAD:main
